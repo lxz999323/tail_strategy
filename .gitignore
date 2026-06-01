@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# 环境变量（含邮箱密码）
+.env
+
+# 数据缓存
+*.pkl
+*.pickle
+
+# 日志
+logs/
+
+# 数据目录（运行时下载）
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统
+Thumbs.db
+.DS_Store

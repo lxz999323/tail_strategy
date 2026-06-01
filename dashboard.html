@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>尾盘买入策略 - 今日选股</title>
+<style>
+  /* ===== 基础重置 & 变量 ===== */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root {
+    --bg: #f0f2f5;
+    --card: #ffffff;
+    --primary: #1a73e8;
+    --success: #0f9d58;
+    --danger: #d93025;
+    --warning: #f9ab00;
+    --text: #202124;
+    --text2: #5f6368;
+    --border: #dadce0;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px;
+    min-height: 100vh;
+  }
+
+  /* ===== 布局 ===== */
+  .container { max-width: 1100px; margin: 0 auto; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
+  .col { flex: 1; min-width: 280px; }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px 24px;
+    transition: box-shadow .2s;
+  }
+  .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-bottom: 12px;
+  }
+
+  /* ===== 顶部横幅 ===== */
+  .header {
+    background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+    color: #fff;
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .header .subtitle {
+    font-size: 13px;
+    opacity: .85;
+    margin-top: 4px;
+  }
+  .header-right {
+    text-align: right;
+  }
+  .header-right .date {
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .header-right .status {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .status.open {
+    background: rgba(255,255,255,.2);
+    color: #fff;
+  }
+  .status.open::before {
+    content: "";
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #66ff88;
+    margin-right: 6px;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .status.closed {
+    background: rgba(255,255,255,.15);
+    color: rgba(255,255,255,.7);
+  }
+
+  /* ===== 参数标签 ===== */
+  .params-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+  .param-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    background: #f1f3f4;
+    padding: 4px 10px;
+    border-radius: 6px;
+    color: var(--text2);
+  }
+  .param-tag .label { color: var(--text2); }
+  .param-tag .value {
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  /* ===== 数据表格 ===== */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  thead th {
+    background: #f8f9fa;
+    padding: 10px 8px;
+    font-weight: 600;
+    color: var(--text2);
+    font-size: 12px;
+    text-align: right;
+    white-space: nowrap;
+    border-bottom: 2px solid var(--border);
+  }
+  thead th:first-child { text-align: left; padding-left: 4px; }
+  thead th:last-child { text-align: center; }
+  tbody td {
+    padding: 12px 8px;
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody td:first-child { text-align: left; padding-left: 4px; }
+  tbody td:last-child { text-align: center; }
+  tbody tr:hover { background: #f8f9ff; }
+  tbody tr:last-child td { border-bottom: none; }
+  .stock-code {
+    font-family: "SF Mono", "Consolas", monospace;
+    font-size: 13px;
+    color: var(--primary);
+    font-weight: 500;
+  }
+  .stock-name { font-weight: 500; }
+  .num-up { color: var(--danger); font-weight: 600; }
+  .num-down { color: var(--success); font-weight: 600; }
+  .num-neutral { color: var(--text2); }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .badge-buy { background: #e6f4ea; color: #1e7e34; }
+  .badge-skip { background: #fce8e6; color: #d93025; }
+  .badge-warn { background: #fef7e0; color: #e37400; }
+
+  /* ===== 汇总 ===== */
+  .summary-grid { display: flex; flex-wrap: wrap; gap: 16px; }
+  .summary-item { flex: 1; min-width: 100px; }
+  .summary-item .number {
+    font-size: 26px;
+    font-weight: 700;
+  }
+  .summary-item .number.green { color: var(--success); }
+  .summary-item .number.blue { color: var(--primary); }
+  .summary-item .number.orange { color: var(--warning); }
+  .summary-item .label {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  /* ===== 空信号 ===== */
+  .no-signal {
+    text-align: center;
+    padding: 50px 20px;
+  }
+  .no-signal .icon { font-size: 48px; margin-bottom: 12px; }
+  .no-signal h2 { font-size: 20px; margin-bottom: 8px; }
+  .no-signal p { color: var(--text2); }
+
+  /* ===== 底部 ===== */
+  .footer {
+    text-align: center;
+    color: var(--text2);
+    font-size: 12px;
+    padding: 20px 0;
+    border-top: 1px solid var(--border);
+    margin-top: 24px;
+  }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 640px) {
+    body { padding: 10px; }
+    .header { padding: 20px; flex-direction: column; text-align: center; }
+    .header-right { text-align: center; margin-top: 10px; }
+    .card { padding: 16px; }
+    table { font-size: 12px; }
+    thead th, tbody td { padding: 8px 4px; }
+    .summary-item .number { font-size: 20px; }
+  }
+
+  /* ===== 信号强弱指示 ===== */
+  .signal-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .signal-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .signal-dot.on { background: var(--success); }
+  .signal-dot.off { background: #e0e0e0; }
+
+  /* 加载状态 */
+  .loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text2);
+  }
+  .loading .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+
+  <!-- ========== 顶部横幅 ========== -->
+  <div class="header">
+    <div>
+      <h1>A股尾盘买入策略</h1>
+      <div class="subtitle">基于因子筛选 + 凯利公式 · 每日收盘前 25 分钟自动选股</div>
+    </div>
+    <div class="header-right">
+      <div class="date" id="currentDate">--</div>
+      <div class="status open" id="marketStatus">交易中</div>
+    </div>
+  </div>
+
+  <!-- ========== 策略参数 ========== -->
+  <div class="row">
+    <div class="col">
+      <div class="card">
+        <div class="card-title">策略参数</div>
+        <div class="params-grid" id="paramsGrid">
+          <span class="param-tag"><span class="label">涨幅</span> <span class="value" id="pRet">2.0% ~ 3.0%</span></span>
+          <span class="param-tag"><span class="label">收盘位置</span> <span class="value" id="pPos">≥ 0.80</span></span>
+          <span class="param-tag"><span class="label">换手率</span> <span class="value" id="pTurn">3.0% ~ 15.0%</span></span>
+          <span class="param-tag"><span class="label">流通市值</span> <span class="value" id="pCap">50亿 ~ 100亿</span></span>
+          <span class="param-tag"><span class="label">止盈</span> <span class="value" id="pStopGain">+3.0%</span></span>
+          <span class="param-tag"><span class="label">止损</span> <span class="value" id="pStopLoss">-3.0%</span></span>
+          <span class="param-tag"><span class="label">最大持仓</span> <span class="value" id="pMaxPos">5 支</span></span>
+          <span class="param-tag"><span class="label">总资金</span> <span class="value" id="pCapital">100 万</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="card-title">回测表现</div>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="number green" id="bWinRate">62.9%</div>
+            <div class="label">胜率</div>
+          </div>
+          <div class="summary-item">
+            <div class="number blue" id="bProfitFactor">1.37</div>
+            <div class="label">盈亏比</div>
+          </div>
+          <div class="summary-item">
+            <div class="number orange" id="bAnnualReturn">+15.8%</div>
+            <div class="label">年化收益率</div>
+          </div>
+          <div class="summary-item">
+            <div class="number blue" id="bTrades">35</div>
+            <div class="label">回测交易次数</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 选股结果 ========== -->
+  <div class="card" id="resultCard">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:16px;">
+      <div class="card-title" style="margin-bottom:0; font-size:16px;">今日选股结果</div>
+      <div>
+        <span class="badge badge-buy" id="stockCountBadge">3 支入选</span>
+        <span style="margin-left:8px; font-size:13px; color:var(--text2);" id="signalTime">数据时间：--</span>
+      </div>
+    </div>
+
+    <!-- 加载中 -->
+    <div class="loading" id="loadingState">
+      <div class="spinner"></div>
+      <p>正在获取实时数据...</p>
+    </div>
+
+    <!-- 有信号 -->
+    <div id="signalTable" style="display:none;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>代码 / 名称</th>
+              <th>最新价</th>
+              <th>尾盘涨幅</th>
+              <th>收盘位置</th>
+              <th>量比</th>
+              <th>换手率</th>
+              <th>流通市值</th>
+              <th>建议买入</th>
+              <th>信号</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody">
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 汇总 -->
+      <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="number blue" id="totalSuggested">0 万</div>
+            <div class="label">建议总金额</div>
+          </div>
+          <div class="summary-item">
+            <div class="number green" id="capitalRatio">0%</div>
+            <div class="label">仓位占比</div>
+          </div>
+          <div class="summary-item">
+            <div class="number" id="remainingCash" style="color:var(--text2);">0 万</div>
+            <div class="label">剩余现金</div>
+          </div>
+          <div class="summary-item">
+            <div class="number" id="stocksCount" style="color:var(--text2);">0 支</div>
+            <div class="label">持仓数量</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 无信号 -->
+    <div class="no-signal" id="noSignal" style="display:none;">
+      <div class="icon">🛌</div>
+      <h2>今日无信号，建议空仓</h2>
+      <p>当前没有股票满足筛选条件，或市场过热超过阈值。</p>
+      <p style="margin-top:8px; color:var(--text2);">耐心等待也是策略的一部分。</p>
+    </div>
+  </div>
+
+  <!-- ========== 操作指引 ========== -->
+  <div class="row">
+    <div class="col">
+      <div class="card">
+        <div class="card-title">下单指引</div>
+        <div style="font-size:14px; line-height:1.8; color:var(--text2);">
+          <p>1. 在 <strong>14:35 ~ 14:50</strong> 之间查看本页面</p>
+          <p>2. 对照"建议买入"金额，以 <strong>市价</strong> 或 <strong>买一价</strong> 挂单</p>
+          <p>3. 若买入价与页面价格差距超过 <strong>1%</strong>，适当调整仓位</p>
+          <p>4. 买入后 <strong>次日</strong> 按止盈 +3% / 止损 -3% / 收盘价 自动卖出</p>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="card-title">盘中提醒</div>
+        <div style="font-size:14px; line-height:1.8; color:var(--text2);" id="tipsContent">
+          <p id="tip1">⏰ 尾盘窗口：14:35 ~ 14:50</p>
+          <p id="tip2">📊 候选过热线：超过 15 支则空仓</p>
+          <p id="tip3">💰 单支上限：总资金的 15%</p>
+          <p id="tip4">📅 今日是交易日</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>本页面由 A 股尾盘买入量化策略系统生成 · 仅供参考，不构成投资建议 · 股市有风险，投资需谨慎</p>
+    <p style="margin-top:4px; font-size:11px;">回测区间：2022-2023 | 最优参数：涨幅2.0~3.0% 收盘位置≥0.8 换手3~15% 市值50~100亿</p>
+    <p style="margin-top:6px; font-size:11px; opacity:.6;">📱 GitHub Pages 自动部署 · 每天 14:35 更新数据</p>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// 核心数据
+// ================================================================
+
+// 策略配置（从回测最优参数读取）
+const STRATEGY = {
+  params: {
+    ret_min: 2.0, ret_max: 3.0,
+    close_pos_min: 0.8,
+    turnover_min: 3.0, turnover_max: 15.0,
+    market_cap_min: 50, market_cap_max: 100,
+  },
+  stopGain: 0.03,
+  stopLoss: -0.03,
+  maxPositions: 5,
+  totalCapital: 1000000,
+  overheatLimit: 15,
+  backtest: {
+    winRate: 62.9,
+    profitFactor: 1.37,
+    annualReturn: 15.8,
+    trades: 35,
+  }
+};
+
+// ================================================================
+// 示例数据（当真实数据不可用时展示）
+// 你可以用 run_daily_pick.py --dry-run 的输出替换这里
+// ================================================================
+const DEMO_DATA = {
+  date: "2026-06-02",
+  time: "14:35",
+  isTradingDay: true,
+  isOverheated: false,
+  stocks: [
+    {
+      code: "000050", name: "深天马A",
+      price: 12.36, ret: 2.34, closePos: 0.88,
+      volRatio: 1.85, turnover: 4.2, marketCap: 62,
+      buyAmount: 150000,
+    },
+    {
+      code: "600062", name: "华润双鹤",
+      price: 18.72, ret: 2.61, closePos: 0.92,
+      volRatio: 2.12, turnover: 6.7, marketCap: 78,
+      buyAmount: 150000,
+    },
+    {
+      code: "000519", name: "中兵红箭",
+      price: 15.88, ret: 2.14, closePos: 0.84,
+      volRatio: 1.56, turnover: 5.1, marketCap: 55,
+      buyAmount: 100000,
+    },
+  ],
+};
+
+// ================================================================
+// 渲染引擎
+// ================================================================
+
+function fmtPrice(v) { return `¥${Number(v).toFixed(2)}`; }
+function fmtPct(v) { return `${v >= 0 ? '+' : ''}${Number(v).toFixed(2)}%`; }
+function fmtWan(v) { return `${(v / 10000).toFixed(1)} 万`; }
+function fmtPctShort(v) { return `${Number(v).toFixed(2)}%`; }
+
+function fmtRet(v) {
+  const cls = v >= 0 ? 'num-up' : 'num-down';
+  return `<span class="${cls}">${fmtPct(v)}</span>`;
+}
+
+// 信号强度：根据各项条件满足程度打分 0~5
+function calcSignalStrength(s) {
+  let score = 0;
+  if (s.ret >= STRATEGY.params.ret_min && s.ret <= STRATEGY.params.ret_max) score++;
+  if (s.closePos >= STRATEGY.params.close_pos_min) score++;
+  if (s.turnover >= STRATEGY.params.turnover_min && s.turnover <= STRATEGY.params.turnover_max) score++;
+  if (s.marketCap >= STRATEGY.params.market_cap_min && s.marketCap <= STRATEGY.params.market_cap_max) score++;
+  if (s.volRatio >= 1.2) score++;
+  return score;
+}
+
+function renderSignalDots(n) {
+  let html = '<span class="signal-bar">';
+  for (let i = 0; i < 5; i++) {
+    html += `<span class="signal-dot ${i < n ? 'on' : 'off'}"></span>`;
+  }
+  html += '</span>';
+  return html;
+}
+
+function renderDate() {
+  const now = new Date();
+  const opts = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+  document.getElementById('currentDate').textContent = now.toLocaleDateString('zh-CN', opts);
+
+  // 判断是否交易日
+  const h = now.getHours();
+  const day = now.getDay();
+  const isTradeDay = day >= 1 && day <= 5;
+  const isMarketOpen = isTradeDay && ((h >= 9 && h < 11) || (h >= 13 && h < 15));
+
+  const statusEl = document.getElementById('marketStatus');
+  const tip4 = document.getElementById('tip4');
+  if (isTradeDay) {
+    tip4.textContent = '📅 今日是交易日';
+    if (isMarketOpen) {
+      statusEl.className = 'status open';
+      statusEl.innerHTML = '<span></span> 交易中';
+    } else if (h >= 15) {
+      statusEl.className = 'status closed';
+      statusEl.textContent = '已收盘';
+    } else {
+      statusEl.className = 'status closed';
+      statusEl.textContent = '盘中休市';
+    }
+  } else {
+    tip4.textContent = '📅 今日非交易日';
+    statusEl.className = 'status closed';
+    statusEl.textContent = '非交易日';
+  }
+}
+
+function renderParams() {
+  const p = STRATEGY.params;
+  document.getElementById('pRet').textContent = `${p.ret_min}% ~ ${p.ret_max}%`;
+  document.getElementById('pPos').textContent = `≥ ${p.close_pos_min.toFixed(2)}`;
+  document.getElementById('pTurn').textContent = `${p.turnover_min}% ~ ${p.turnover_max}%`;
+  document.getElementById('pCap').textContent = `${p.market_cap_min}亿 ~ ${p.market_cap_max}亿`;
+  document.getElementById('pStopGain').textContent = `+${(STRATEGY.stopGain * 100).toFixed(1)}%`;
+  document.getElementById('pStopLoss').textContent = `-${(Math.abs(STRATEGY.stopLoss) * 100).toFixed(1)}%`;
+  document.getElementById('pMaxPos').textContent = `${STRATEGY.maxPositions} 支`;
+  document.getElementById('pCapital').textContent = `${(STRATEGY.totalCapital / 10000).toFixed(0)} 万`;
+}
+
+function renderBacktest() {
+  const b = STRATEGY.backtest;
+  document.getElementById('bWinRate').textContent = `${b.winRate}%`;
+  document.getElementById('bProfitFactor').textContent = b.profitFactor.toFixed(2);
+  document.getElementById('bAnnualReturn').textContent = `+${b.annualReturn}%`;
+  document.getElementById('bTrades').textContent = b.trades;
+}
+
+function renderStocks(data) {
+  document.getElementById('loadingState').style.display = 'none';
+
+  if (!data || data.isOverheated || !data.stocks || data.stocks.length === 0) {
+    document.getElementById('signalTable').style.display = 'none';
+    document.getElementById('noSignal').style.display = 'block';
+    document.getElementById('stockCountBadge').textContent = '0 支入选';
+    document.getElementById('stockCountBadge').className = 'badge badge-skip';
+    document.getElementById('signalTime').textContent = `数据时间：${data.date || '--'} ${data.time || '--'}`;
+    return;
+  }
+
+  const stocks = data.stocks;
+  document.getElementById('signalTable').style.display = 'block';
+  document.getElementById('noSignal').style.display = 'none';
+  document.getElementById('stockCountBadge').textContent = `${stocks.length} 支入选`;
+  document.getElementById('stockCountBadge').className = 'badge badge-buy';
+  document.getElementById('signalTime').textContent = `数据时间：${data.date} ${data.time}`;
+
+  // 排序：按收盘位置降序
+  stocks.sort((a, b) => b.closePos - a.closePos);
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  let totalBuy = 0;
+  for (const s of stocks) {
+    const strength = calcSignalStrength(s);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        <div class="stock-code">${s.code}</div>
+        <div class="stock-name">${s.name}</div>
+      </td>
+      <td>${fmtPrice(s.price)}</td>
+      <td>${fmtRet(s.ret)}</td>
+      <td>${s.closePos.toFixed(2)}</td>
+      <td>${s.volRatio.toFixed(2)}</td>
+      <td>${fmtPctShort(s.turnover)}</td>
+      <td>${s.marketCap.toFixed(0)} 亿</td>
+      <td style="font-weight:700; color:var(--danger);">${fmtWan(s.buyAmount)}</td>
+      <td>${renderSignalDots(strength)}</td>
+    `;
+    tbody.appendChild(tr);
+    totalBuy += s.buyAmount;
+  }
+
+  // 汇总
+  const remaining = STRATEGY.totalCapital - totalBuy;
+  const ratio = (totalBuy / STRATEGY.totalCapital) * 100;
+  document.getElementById('totalSuggested').textContent = fmtWan(totalBuy);
+  document.getElementById('capitalRatio').textContent = `${ratio.toFixed(1)}%`;
+  document.getElementById('remainingCash').textContent = fmtWan(Math.max(0, remaining));
+  document.getElementById('stocksCount').textContent = `${stocks.length} 支`;
+}
+
+// ================================================================
+// 数据加载
+// ================================================================
+
+// 尝试从外部 JSON 加载（可将 run_daily_pick.py 的输出导出为 dashboard_data.json）
+async function loadData() {
+  try {
+    const resp = await fetch('./dashboard_data.json');
+    if (resp.ok) {
+      const data = await resp.json();
+      return data;
+    }
+  } catch (e) {
+    // JSON 不存在，使用演示数据
+  }
+  return DEMO_DATA;
+}
+
+// ================================================================
+// 启动
+// ================================================================
+
+async function init() {
+  renderDate();
+  renderParams();
+  renderBacktest();
+
+  const data = await loadData();
+
+  // 模拟加载延迟
+  setTimeout(() => {
+    renderStocks(data);
+  }, 600);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+{
+  "date": "2026-06-02",
+  "time": "14:35",
+  "isTradingDay": true,
+  "isOverheated": false,
+  "stocks": [
+    {
+      "code": "000050", "name": "深天马A",
+      "price": 12.36, "ret": 2.34, "closePos": 0.88,
+      "volRatio": 1.85, "turnover": 4.2, "marketCap": 62,
+      "buyAmount": 150000
+    },
+    {
+      "code": "600062", "name": "华润双鹤",
+      "price": 18.72, "ret": 2.61, "closePos": 0.92,
+      "volRatio": 2.12, "turnover": 6.7, "marketCap": 78,
+      "buyAmount": 150000
+    },
+    {
+      "code": "000519", "name": "中兵红箭",
+      "price": 15.88, "ret": 2.14, "closePos": 0.84,
+      "volRatio": 1.56, "turnover": 5.1, "marketCap": 55,
+      "buyAmount": 100000
+    }
+  ]
+}

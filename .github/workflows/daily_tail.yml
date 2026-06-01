@@ -1,0 +1,98 @@
+# ============================================================
+# 每日尾盘选股 + 自动部署仪表盘
+# ============================================================
+# 每天 14:35 CST 自动运行：
+#   1. 获取实时行情，筛选股票，计算凯利仓位
+#   2. 发送 HTML 邮件报告
+#   3. 生成 dashboard_data.json
+#   4. 部署到 GitHub Pages（手机上直接打开看结论）
+#
+# 需要的 GitHub Secrets:
+#   EMAIL_USER     - 发件人邮箱
+#   EMAIL_PASSWORD - SMTP 授权码
+#   EMAIL_TO       - 收件人（可选）
+# ============================================================
+
+name: 每日选股 + 部署
+
+on:
+  schedule:
+    - cron: '35 6 * * 1-5'   # 北京时间 14:35 = UTC 06:35
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  # ========== 第一步：运行策略 ==========
+  run-strategy:
+    name: 运行策略
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 运行每日选股 + 发送邮件
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python run_daily_pick.py
+
+      - name: 导出数据到 dashboard_data.json
+        run: python update_dashboard.py
+
+      - name: 准备 GitHub Pages 部署文件
+        run: |
+          mkdir -p _site
+          cp dashboard.html _site/index.html
+          cp dashboard_data.json _site/dashboard_data.json
+          cp dashboard.html _site/dashboard.html
+          echo "=== 部署文件 ==="
+          ls -la _site/
+
+      - name: 上传 Pages 部署包
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: 上传日志（调试用）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy-logs
+          path: logs/
+          retention-days: 7
+
+  # ========== 第二步：部署到 GitHub Pages ==========
+  deploy:
+    name: 部署到 Pages
+    needs: run-strategy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
