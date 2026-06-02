@@ -123,7 +123,7 @@ def send_html_report(df_stocks: pd.DataFrame, total_capital: float = TOTAL_CAPIT
         subject = f"[尾盘策略] {len(df_stocks)} 支入选 - {datetime.now().strftime('%m/%d')}"
         logger.info("发送选股报告，%d 支股票", len(df_stocks))
 
-    msg["From"] = Header(f"尾盘策略 <{email_user}>")
+    msg["From"] = f"尾盘策略 <{email_user}>"
     msg["To"] = ", ".join(to_emails)
     msg["Subject"] = Header(subject, "utf-8")
 
